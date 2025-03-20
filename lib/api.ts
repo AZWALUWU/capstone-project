@@ -64,22 +64,22 @@ export async function submitDiagnosis(data: {
     const mockDiagnoses: Record<string, any> = {
       "fever+moderate+4_7_days": {
         condition: "Influenza",
-        description: "A viral infection that attacks your respiratory system.",
+        description: "Infeksi virus yang menyerang sistem pernapasan Anda.",
         confidence: 0.85,
         firstAid: [
-          "Rest and stay hydrated",
-          "Take over-the-counter fever reducers",
-          "Consult a doctor if symptoms worsen",
+          "Istirahat dan tetap terhidrasi",
+          "Minum obat penurun demam yang dijual bebas",
+          "Konsultasikan dengan dokter jika gejala memburuk",
         ],
       },
       default: {
-        condition: "General Discomfort",
-        description: "Your symptoms suggest a general discomfort.",
+        condition: "Ketidaknyamanan Umum",
+        description: "Gejala Anda menunjukkan ketidaknyamanan umum.",
         confidence: 0.65,
         firstAid: [
-          "Rest and monitor your symptoms",
-          "Stay hydrated",
-          "Consult a healthcare professional if symptoms persist",
+          "Istirahat dan pantau gejala Anda",
+          "Tetap terhidrasi",
+          "Konsultasikan dengan profesional kesehatan jika gejala berlanjut",
         ],
       },
     }
@@ -123,6 +123,41 @@ export async function checkApiHealth() {
     return response.json()
   } catch (error) {
     return { status: "unhealthy", message: (error as Error).message }
+  }
+}
+
+/**
+ * Fetch model information
+ */
+export async function fetchModelInfo() {
+  try {
+    const response = await fetch(`${API_URL}/model-info`)
+
+    if (!response.ok) {
+      return { error: "Failed to fetch model info" }
+    }
+
+    return response.json()
+  } catch (error) {
+    return { error: (error as Error).message }
+  }
+}
+
+/**
+ * Fetch feature options for the diagnosis form
+ */
+export async function fetchFeatureOptions() {
+  try {
+    const response = await fetch(`${API_URL}/feature-options`)
+
+    if (!response.ok) {
+      return null
+    }
+
+    return response.json()
+  } catch (error) {
+    console.error("Error fetching feature options:", error)
+    return null
   }
 }
 

@@ -2,91 +2,40 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle, Info } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { createBrowserClient } from "@/lib/supabase-browser"
+import { submitDiagnosis } from "@/lib/api"
 
-// Mock data for the diagnosis form - in a real app, this would come from the ML model
-const symptoms = [
-  { id: "fever", label: "Demam" },
-  { id: "cough", label: "Batuk" },
-  { id: "headache", label: "Sakit Kepala" },
-  { id: "fatigue", label: "Kelelahan" },
-  { id: "nausea", label: "Mual" },
-  { id: "dizziness", label: "Pusing" },
-  { id: "sore_throat", label: "Sakit Tenggorokan" },
-  { id: "chest_pain", label: "Nyeri Dada" },
-]
-
-const durations = [
-  { id: "less_than_day", label: "Kurang dari sehari" },
-  { id: "1_3_days", label: "1-3 hari" },
-  { id: "4_7_days", label: "4-7 hari" },
-  { id: "more_than_week", label: "Lebih dari seminggu" },
-]
-
-const severities = [
-  { id: "mild", label: "Ringan" },
-  { id: "moderate", label: "Sedang" },
-  { id: "severe", label: "Berat" },
-]
-
-// Mock diagnosis results - in a real app, this would come from the ML model API
-const mockDiagnoses: Record<string, any> = {
-  "fever+moderate+4_7_days": {
-    condition: "Influenza",
-    description:
-      "Infeksi virus yang menyerang sistem pernapasan Anda. Gejala umum termasuk demam, nyeri tubuh, dan kelelahan.",
-    confidence: 0.85,
-    firstAid: [
-      "Istirahat dan tetap terhidrasi",
-      "Minum obat penurun demam yang dijual bebas",
-      "Gunakan humidifier untuk meredakan hidung tersumbat",
-      "Konsultasikan dengan dokter jika gejala memburuk",
-    ],
-  },
-  "headache+severe+more_than_week": {
-    condition: "Migrain",
-    description:
-      "Sakit kepala dengan intensitas bervariasi, sering disertai mual dan sensitivitas terhadap cahaya dan suara.",
-    confidence: 0.78,
-    firstAid: [
-      "Beristirahat di ruangan yang tenang dan gelap",
-      "Aplikasikan kompres dingin pada dahi Anda",
-      "Coba pereda nyeri yang dijual bebas",
-      "Tetap terhidrasi",
-      "Konsultasikan dengan dokter untuk migrain berulang",
-    ],
-  },
-  "cough+moderate+1_3_days": {
-    condition: "Flu Biasa",
-    description:
-      "Infeksi virus pada hidung dan tenggorokan Anda. Biasanya tidak berbahaya, meskipun mungkin tidak terasa seperti itu.",
-    confidence: 0.82,
-    firstAid: [
-      "Istirahat yang cukup",
-      "Minum banyak cairan untuk mencegah dehidrasi",
-      "Gunakan obat flu yang dijual bebas",
-      "Coba madu untuk meredakan batuk",
-    ],
-  },
-  "fatigue+mild+more_than_week": {
-    condition: "Kelelahan Kronis",
-    description: "Kelelahan ekstrem yang tidak dapat dijelaskan oleh kondisi medis yang mendasarinya.",
-    confidence: 0.65,
-    firstAid: [
-      "Tetapkan jadwal tidur yang teratur",
-      "Atur kecepatan diri selama beraktivitas",
-      "Hindari kafein, alkohol, dan nikotin",
-      "Pertimbangkan untuk berbicara dengan penyedia layanan kesehatan",
-    ],
-  },
+// Default options if API fails to provide them
+const defaultOptions = {
+  symptom: [
+    { id: "fever", label: "Demam" },
+    { id: "cough", label: "Batuk" },
+    { id: "headache", label: "Sakit Kepala" },
+    { id: "fatigue", label: "Kelelahan" },
+    { id: "nausea", label: "Mual" },
+    { id: "dizziness", label: "Pusing" },
+    { id: "sore_throat", label: "Sakit Tenggorokan" },
+    { id: "chest_pain", label: "Nyeri Dada" },
+  ],
+  severity: [
+    { id: "mild", label: "Ringan" },
+    { id: "moderate", label: "Sedang" },
+    { id: "severe", label: "Berat" },
+  ],
+  duration: [
+    { id: "less_than_day", label: "Kurang dari sehari" },
+    { id: "1_3_days", label: "1-3 hari" },
+    { id: "4_7_days", label: "4-7 hari" },
+    { id: "more_than_week", label: "Lebih dari seminggu" },
+  ],
 }
 
 export default function DiagnosisPage() {
@@ -97,8 +46,54 @@ export default function DiagnosisPage() {
   const [result, setResult] = useState<any>(null)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [modelInfo, setModelInfo] = useState<any>(null)
+  const [options, setOptions] = useState(defaultOptions)
+  const [loadingOptions, setLoadingOptions] = useState(true)
+
   const router = useRouter()
   const supabase = createBrowserClient()
+
+  // Fetch feature options and model info when the component mounts
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/feature-options`,
+        )
+        if (response.ok) {
+          const data = await response.json()
+
+          // Transform the API response to match our format
+          const transformedOptions: any = {}
+
+          for (const [key, values] of Object.entries(data)) {
+            transformedOptions[key] = (values as string[]).map((value) => ({
+              id: value,
+              label: value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, " "),
+            }))
+          }
+
+          setOptions(transformedOptions)
+        }
+      } catch (err) {
+        console.error("Error fetching options:", err)
+      }
+
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/model-info`)
+        if (response.ok) {
+          const data = await response.json()
+          setModelInfo(data)
+        }
+      } catch (err) {
+        console.error("Error fetching model info:", err)
+      }
+
+      setLoadingOptions(false)
+    }
+
+    fetchOptions()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -106,28 +101,14 @@ export default function DiagnosisPage() {
     setError(null)
 
     try {
-      // Simulate API call to Flask backend with ML model
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const diagnosis = await submitDiagnosis({
+        symptom,
+        severity,
+        duration,
+      })
 
-      // Create a key to look up in our mock diagnoses
-      const key = `${symptom}+${severity}+${duration}`
-
-      // Default diagnosis if the specific combination isn't found
-      const defaultDiagnosis = {
-        condition: "Ketidaknyamanan Umum",
-        description:
-          "Gejala Anda menunjukkan ketidaknyamanan umum yang mungkin terkait dengan berbagai faktor termasuk stres, penyakit ringan, atau faktor gaya hidup.",
-        confidence: 0.65,
-        firstAid: [
-          "Istirahat dan pantau gejala Anda",
-          "Tetap terhidrasi",
-          "Konsultasikan dengan profesional kesehatan jika gejala berlanjut atau memburuk",
-        ],
-      }
-
-      const diagnosis = mockDiagnoses[key] || defaultDiagnosis
       setResult(diagnosis)
-    } catch (err) {
+    } catch (err: any) {
       setError("Gagal mendapatkan diagnosis. Silakan coba lagi nanti.")
       console.error(err)
     } finally {
@@ -178,15 +159,15 @@ export default function DiagnosisPage() {
   }
 
   const getSymptomLabel = (id: string) => {
-    return symptoms.find((s) => s.id === id)?.label || id
+    return options.symptom?.find((s) => s.id === id)?.label || id
   }
 
   const getSeverityLabel = (id: string) => {
-    return severities.find((s) => s.id === id)?.label || id
+    return options.severity?.find((s) => s.id === id)?.label || id
   }
 
   const getDurationLabel = (id: string) => {
-    return durations.find((d) => d.id === id)?.label || id
+    return options.duration?.find((d) => d.id === id)?.label || id
   }
 
   return (
@@ -209,6 +190,35 @@ export default function DiagnosisPage() {
           </AlertDescription>
         </Alert>
 
+        {modelInfo && (
+          <Card className="mb-8 bg-primary/5 border-primary/20">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center">
+                <Info className="h-4 w-4 mr-2" />
+                Informasi Model AI
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium">Akurasi Model:</p>
+                  <p className="text-lg font-bold text-primary">{modelInfo.accuracy}%</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Fitur Terpenting:</p>
+                  <p className="text-lg font-bold text-primary">{modelInfo.most_important_feature}</p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                ⭐ Akurasi model didasarkan pada data yang digunakan untuk pelatihan dan mencerminkan seberapa baik
+                model AI dapat memberikan rekomendasi yang benar untuk dataset tersebut. Akurasi model dan fitur
+                terpenting dapat membantu memahami cara kerja model, tetapi tidak boleh dianggap sebagai fakta absolut
+                tentang dunia nyata.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {error && (
           <Alert variant="destructive" className="mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -225,66 +235,72 @@ export default function DiagnosisPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="symptom">Gejala Utama</Label>
-                  <Select value={symptom} onValueChange={setSymptom} required>
-                    <SelectTrigger id="symptom">
-                      <SelectValue placeholder="Pilih gejala" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {symptoms.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {loadingOptions ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="symptom">Gejala Utama</Label>
+                    <Select value={symptom} onValueChange={setSymptom} required>
+                      <SelectTrigger id="symptom">
+                        <SelectValue placeholder="Pilih gejala" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.symptom?.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="severity">Tingkat Keparahan</Label>
-                  <Select value={severity} onValueChange={setSeverity} required>
-                    <SelectTrigger id="severity">
-                      <SelectValue placeholder="Pilih tingkat keparahan" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {severities.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="severity">Tingkat Keparahan</Label>
+                    <Select value={severity} onValueChange={setSeverity} required>
+                      <SelectTrigger id="severity">
+                        <SelectValue placeholder="Pilih tingkat keparahan" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.severity?.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="duration">Durasi</Label>
-                  <Select value={duration} onValueChange={setDuration} required>
-                    <SelectTrigger id="duration">
-                      <SelectValue placeholder="Pilih durasi" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {durations.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="duration">Durasi</Label>
+                    <Select value={duration} onValueChange={setDuration} required>
+                      <SelectTrigger id="duration">
+                        <SelectValue placeholder="Pilih durasi" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {options.duration?.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Menganalisis...
-                    </>
-                  ) : (
-                    "Dapatkan Penilaian"
-                  )}
-                </Button>
-              </form>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Menganalisis...
+                      </>
+                    ) : (
+                      "Dapatkan Penilaian"
+                    )}
+                  </Button>
+                </form>
+              )}
             </CardContent>
           </Card>
         ) : (

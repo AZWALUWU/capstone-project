@@ -12,16 +12,18 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createBrowserClient } from "@/lib/supabase-browser"
 import { Loader2 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 // Blog categories
 const categories = [
-  "Health Tips",
-  "Nutrition",
-  "First Aid",
-  "Mental Health",
-  "Wellness",
-  "Chronic Care",
-  "Preventive Care",
+  "Tips Kesehatan",
+  "Nutrisi",
+  "Pertolongan Pertama",
+  "Kesehatan Mental",
+  "Kesejahteraan",
+  "Perawatan Kronis",
+  "Pencegahan",
 ]
 
 interface BlogEditorProps {
@@ -36,8 +38,13 @@ export default function BlogEditor({ post, isEdit = false }: BlogEditorProps) {
   const [category, setCategory] = useState("")
   const [imageUrl, setImageUrl] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const supabase = createBrowserClient()
+
+  useEffect(() => {
+    checkAdmin()
+  }, [])
 
   useEffect(() => {
     if (post && isEdit) {
@@ -49,9 +56,34 @@ export default function BlogEditor({ post, isEdit = false }: BlogEditorProps) {
     }
   }, [post, isEdit])
 
+  const checkAdmin = async () => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session) {
+        router.push("/login")
+        return
+      }
+
+      // Check if user is admin
+      const { data: profile } = await supabase.from("profiles").select("*").eq("id", session.user.id).single()
+
+      if (!profile || !profile.preferences?.is_admin) {
+        setError("Anda tidak memiliki akses untuk mengedit artikel.")
+        router.push("/")
+      }
+    } catch (err) {
+      console.error("Error checking admin:", err)
+      setError("Terjadi kesalahan saat memeriksa status admin.")
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError(null)
 
     try {
       const {
@@ -61,6 +93,13 @@ export default function BlogEditor({ post, isEdit = false }: BlogEditorProps) {
       if (!session) {
         router.push("/login")
         return
+      }
+
+      // Check if user is admin
+      const { data: profile } = await supabase.from("profiles").select("*").eq("id", session.user.id).single()
+
+      if (!profile || !profile.preferences?.is_admin) {
+        throw new Error("Anda tidak memiliki akses untuk mengedit artikel.")
       }
 
       const postData = {
@@ -86,46 +125,71 @@ export default function BlogEditor({ post, isEdit = false }: BlogEditorProps) {
 
       router.push("/admin/blog")
       router.refresh()
-    } catch (error) {
-      console.error("Error saving post:", error)
-      alert("Failed to save post. Please try again.")
+    } catch (err: any) {
+      console.error("Error saving post:", err)
+      setError(err.message || "Gagal menyimpan artikel. Silakan coba lagi.")
     } finally {
       setLoading(false)
     }
   }
 
+  if (error && error.includes("tidak memiliki akses")) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{isEdit ? "Edit Artikel Blog" : "Buat Artikel Blog Baru"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{isEdit ? "Edit Blog Post" : "Create New Blog Post"}</CardTitle>
+        <CardTitle>{isEdit ? "Edit Artikel Blog" : "Buat Artikel Blog Baru"}</CardTitle>
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-6">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title">Judul</Label>
             <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="excerpt">Excerpt</Label>
+            <Label htmlFor="excerpt">Ringkasan</Label>
             <Textarea id="excerpt" value={excerpt} onChange={(e) => setExcerpt(e.target.value)} rows={3} required />
-            <p className="text-sm text-muted-foreground">A brief summary of the post that will appear in listings.</p>
+            <p className="text-sm text-muted-foreground">
+              Ringkasan singkat artikel yang akan muncul di daftar artikel.
+            </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="content">Content</Label>
+            <Label htmlFor="content">Konten</Label>
             <Textarea id="content" value={content} onChange={(e) => setContent(e.target.value)} rows={15} required />
             <p className="text-sm text-muted-foreground">
-              HTML content is supported. Use &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, etc. for formatting.
+              Konten HTML didukung. Gunakan &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, dll. untuk pemformatan.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+              <Label htmlFor="category">Kategori</Label>
               <Select value={category} onValueChange={setCategory} required>
                 <SelectTrigger id="category">
-                  <SelectValue placeholder="Select a category" />
+                  <SelectValue placeholder="Pilih kategori" />
                 </SelectTrigger>
                 <SelectContent>
                   {categories.map((cat) => (
@@ -138,7 +202,7 @@ export default function BlogEditor({ post, isEdit = false }: BlogEditorProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="imageUrl">Image URL</Label>
+              <Label htmlFor="imageUrl">URL Gambar</Label>
               <Input
                 id="imageUrl"
                 value={imageUrl}
@@ -150,18 +214,18 @@ export default function BlogEditor({ post, isEdit = false }: BlogEditorProps) {
         </CardContent>
         <CardFooter className="flex justify-between">
           <Button type="button" variant="outline" onClick={() => router.back()}>
-            Cancel
+            Batal
           </Button>
           <Button type="submit" disabled={loading}>
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isEdit ? "Updating..." : "Creating..."}
+                {isEdit ? "Memperbarui..." : "Membuat..."}
               </>
             ) : isEdit ? (
-              "Update Post"
+              "Perbarui Artikel"
             ) : (
-              "Create Post"
+              "Buat Artikel"
             )}
           </Button>
         </CardFooter>

@@ -1,21 +1,48 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { createServerClient } from "@/lib/supabase-server"
-import { ArrowRight, Stethoscope, BookOpen, Heart, ArrowUpRight } from "lucide-react"
+import { ArrowRight, Stethoscope, BookOpen, Heart, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ThemeToggleLarge } from "@/components/theme-toggle-large"
 
 export default async function HomePage() {
-  const supabase = createServerClient()
+  // Fetch recent blog posts with error handling
+  let recentPosts = []
+  let supabaseError = null
 
-  // Fetch recent blog posts
-  const { data: recentPosts } = await supabase
-    .from("blog_posts")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(3)
+  try {
+    // Import the createServerClient function dynamically to handle potential errors
+    const { createServerClient } = await import("@/lib/supabase-server")
+    const supabase = createServerClient()
+
+    const { data, error } = await supabase
+      .from("blog_posts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(3)
+
+    if (error) throw error
+    recentPosts = data || []
+  } catch (error) {
+    console.error("Error fetching blog posts:", error)
+    supabaseError = "Failed to connect to the database. Please check your Supabase configuration."
+  }
 
   return (
     <main>
+      {/* Floating theme toggle button */}
+      <ThemeToggleLarge />
+
+      {/* Display error message if Supabase connection failed */}
+      {supabaseError && (
+        <div className="container mx-auto px-4 py-6">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{supabaseError}</AlertDescription>
+          </Alert>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="py-20 md:py-28 bg-gradient-to-b from-primary/10 to-background">
         <div className="container mx-auto px-4 text-center">
@@ -26,15 +53,10 @@ export default async function HomePage() {
             Dapatkan diagnosis awal, panduan kesehatan, dan informasi medis terpercaya untuk membantu Anda mengelola
             kesehatan dengan lebih baik.
           </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-4">
+          <div className="flex justify-center">
             <Link href="/diagnosis">
               <Button size="lg" className="gap-2">
                 Mulai Diagnosis <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link href="/guides">
-              <Button size="lg" variant="outline" className="gap-2">
-                Jelajahi Panduan <ArrowUpRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>
@@ -52,7 +74,7 @@ export default async function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <Card className="border-none shadow-lg">
+            <Card className="border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:border-primary/20">
               <CardHeader className="pb-2">
                 <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                   <Stethoscope className="h-6 w-6 text-primary" />
@@ -65,14 +87,14 @@ export default async function HomePage() {
               </CardContent>
               <CardFooter>
                 <Link href="/diagnosis">
-                  <Button variant="ghost" className="gap-2">
+                  <Button variant="ghost" className="gap-2 text-primary hover:text-primary/80 hover:bg-primary/5">
                     Coba Sekarang <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
               </CardFooter>
             </Card>
 
-            <Card className="border-none shadow-lg">
+            <Card className="border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:border-primary/20">
               <CardHeader className="pb-2">
                 <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                   <BookOpen className="h-6 w-6 text-primary" />
@@ -86,14 +108,14 @@ export default async function HomePage() {
               </CardContent>
               <CardFooter>
                 <Link href="/guides">
-                  <Button variant="ghost" className="gap-2">
+                  <Button variant="ghost" className="gap-2 text-primary hover:text-primary/80 hover:bg-primary/5">
                     Lihat Panduan <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
               </CardFooter>
             </Card>
 
-            <Card className="border-none shadow-lg">
+            <Card className="border-none shadow-lg hover:shadow-xl transition-all duration-300 hover:border-primary/20">
               <CardHeader className="pb-2">
                 <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
                   <Heart className="h-6 w-6 text-primary" />
@@ -106,7 +128,7 @@ export default async function HomePage() {
               </CardContent>
               <CardFooter>
                 <Link href="/blog">
-                  <Button variant="ghost" className="gap-2">
+                  <Button variant="ghost" className="gap-2 text-primary hover:text-primary/80 hover:bg-primary/5">
                     Baca Blog <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
@@ -208,19 +230,10 @@ export default async function HomePage() {
             Bergabunglah dengan ribuan orang yang telah menggunakan Sehatica untuk mengelola kesehatan mereka dengan
             lebih baik.
           </p>
-          <div className="flex flex-col sm:flex-row justify-center gap-4">
+          <div className="flex justify-center">
             <Link href="/signup">
               <Button size="lg" variant="secondary" className="gap-2">
                 Daftar Sekarang <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link href="/about">
-              <Button
-                size="lg"
-                variant="outline"
-                className="bg-transparent border-primary-foreground text-primary-foreground hover:bg-primary-foreground/10 gap-2"
-              >
-                Pelajari Lebih Lanjut <ArrowUpRight className="h-4 w-4" />
               </Button>
             </Link>
           </div>

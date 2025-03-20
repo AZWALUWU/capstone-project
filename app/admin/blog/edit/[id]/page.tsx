@@ -28,7 +28,7 @@ export default async function EditBlogPostPage({ params }: { params: { id: strin
 
   return (
     <div className="container mx-auto px-4 py-12">
-      <h1 className="text-3xl font-bold mb-8">Edit Blog Post</h1>
+      <h1 className="text-3xl font-bold mb-8">Edit Artikel Blog</h1>
       <BlogEditor post={post} isEdit={true} />
     </div>
   )
