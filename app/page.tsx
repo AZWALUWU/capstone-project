@@ -27,8 +27,8 @@ export default async function HomePage() {
     recentPosts = data || [];
   } catch (error) {
     console.error("Error fetching blog posts:", error);
-    // supabaseError =
-    //   "Failed to connect to the database. Please check your Supabase configuration.";
+    supabaseError =
+      "Failed to connect to the database. Please check your Supabase configuration.";
   }
 
   return (
